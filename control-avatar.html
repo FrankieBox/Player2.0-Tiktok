@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <title>Painel de Controlo 1 - Avatar</title>
+    <style>
+        body { font-family: Arial, sans-serif; background: #121212; color: #fff; padding: 20px; }
+        .card { background: #1e1e1e; padding: 15px; margin-bottom: 15px; border-radius: 8px; }
+        button { background: #6200ee; color: #fff; border: none; padding: 10px 15px; margin: 5px; border-radius: 4px; cursor: pointer; }
+        button:hover { background: #7b1fa2; }
+    </style>
+</head>
+<body>
+    <h1>Painel de Controlo - Canal 1 (Avatar)</h1>
+
+    <div class="card">
+        <h3>Testar Estados</h3>
+        <button onclick="sendVideo('idle01.mp4')">Idle 01</button>
+        <button onclick="sendVideo('talking01.mp4')">Talking 01</button>
+        <button onclick="sendVideo('reactions01.mp4')">Reaction 01</button>
+    </div>
+
+    <div class="card">
+        <h3>Escala e Zoom do Avatar</h3>
+        <button onclick="setScale(0.8)">Zoom Out (0.8x)</button>
+        <button onclick="setScale(1.0)">Normal (1.0x)</button>
+        <button onclick="setScale(1.2)">Zoom In (1.2x)</button>
+    </div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script>
+        const socket = io();
+
+        function sendVideo(filename) {
+            socket.emit('avatar-command', { video: filename });
+        }
+
+        function setScale(value) {
+            socket.emit('avatar-command', { scale: value });
+        }
+    </script>
+</body>
+</html>
