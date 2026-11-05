@@ -1,0 +1,13 @@
+{
+  "name": "avatar-live-system",
+  "version": "1.0.0",
+  "description": "Sistema Autónomo de Avatar para Live sem OBS",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "socket.io": "^4.7.5"
+  }
+}
