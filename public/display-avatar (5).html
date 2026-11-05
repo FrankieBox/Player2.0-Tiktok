@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Display 1 - Avatar Chroma Key (9:16)</title>
+    <style>
+        * { box-sizing: border-box; }
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100vw;
+            height: 100vh;
+            background: transparent;
+            overflow: hidden;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        #avatar-container {
+            position: relative;
+            width: 100vw;
+            height: 100vh;
+            max-width: calc(100vh * (9 / 16));
+            max-height: calc(100vw * (16 / 9));
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            transform: scale(1);
+            transition: transform 0.3s ease;
+        }
+
+        #avatar-video {
+            display: none; /* O vídeo serve de fonte oculta para o motor */
+        }
+
+        #chroma-canvas {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="avatar-container">
+        <video id="avatar-video" autoplay muted playsinline crossorigin="anonymous"></video>
+        <canvas id="chroma-canvas"></canvas>
+    </div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script>
+        const socket = io();
+        const video = document.getElementById('avatar-video');
+        const canvas = document.getElementById('chroma-canvas');
+        const ctx = canvas.getContext('2d', { willReadFrequently: true });
+        const container = document.getElementById('avatar-container');
+
+        let animationFrameId = null;
+
+        function processFrame() {
+            if (video.paused || video.ended) return;
+
+            if (canvas.width !== video.videoWidth || canvas.height !== video.videoHeight) {
+                canvas.width = video.videoWidth || 720;
+                canvas.height = video.videoHeight || 1280;
+            }
+
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+            let frame = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            let data = frame.data;
+
+            // Motor de Chroma Key: Remove pixels onde o verde domina
+            for (let i = 0; i < data.length; i += 4) {
+                let red = data[i];
+                let green = data[i + 1];
+                let blue = data[i + 2];
+
+                // Condição calibrada para o fundo verde sólido de IA
+                if (green > 80 && green > red * 1.15 && green > blue * 1.15) {
+                    data[i + 3] = 0; // Torna o pixel transparente
+                }
+            }
+
+            ctx.putImageData(frame, 0, 0);
+            animationFrameId = requestAnimationFrame(processFrame);
+        }
+
+        video.addEventListener('play', () => {
+            if (animationFrameId) cancelAnimationFrame(animationFrameId);
+            processFrame();
+        });
+
+        // Recebe comandos do Painel de Controlo 1
+        socket.on('update-avatar', (data) => {
+            if (data.video) {
+                video.src = `/assets/${data.video}`;
+                video.play().catch(err => console.log("Aguardando interação:", err));
+            }
+            if (data.scale) {
+                container.style.transform = `scale(${data.scale})`;
+            }
+        });
+    </script>
+</body>
+</html>

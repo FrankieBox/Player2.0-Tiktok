@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Painel de Controlo - Avatar (Canal 1)</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #121212;
+            color: #fff;
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        h2 { color: #00ffcc; text-align: center; }
+        .section {
+            background: #1e1e1e;
+            border: 1px solid #333;
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 15px;
+            width: 100%;
+            max-width: 400px;
+        }
+        h3 { font-size: 1rem; color: #38bdf8; margin-top: 0; }
+        .btn-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 10px;
+        }
+        button {
+            background-color: #334155;
+            color: white;
+            border: none;
+            padding: 12px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: background 0.2s;
+        }
+        button:hover { background-color: #00ffcc; color: #000; }
+        button.action-btn { background-color: #6200ee; grid-column: span 2; }
+        button.action-btn:hover { background-color: #bb86fc; color: #000; }
+    </style>
+</head>
+<body>
+
+    <h2>Controlo do Avatar - Canal 1</h2>
+
+    <!-- Controlo de Estados e Rotação -->
+    <div class="section">
+        <h3>Motor de Comportamento</h3>
+        <div class="btn-grid">
+            <button onclick="triggerCategory('idle')">Modo Idle (Pausa)</button>
+            <button onclick="triggerCategory('talking')">Modo Fala (Talking)</button>
+            <button class="action-btn" onclick="triggerCategory('reaction')">Disparar Reação (CTA)</button>
+        </div>
+    </div>
+
+    <!-- Controlo de Escala / Zoom -->
+    <div class="section">
+        <h3>Ajuste de Escala (Zoom 9:16)</h3>
+        <div class="btn-grid">
+            <button onclick="setScale(0.9)">Zoom Out (0.9x)</button>
+            <button onclick="setScale(1.0)">Normal (1.0x)</button>
+            <button onclick="setScale(1.1)">Zoom In (1.1x)</button>
+            <button onclick="setScale(1.25)">Zoom Close (1.25x)</button>
+        </div>
+    </div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script>
+        const socket = io();
+
+        // Biblioteca de assets atualizada com base nos vídeos disponíveis
+        const library = {
+            idle: ['idle05.mp4', 'idle06.mp4', 'idle07.mp4', 'idle08.mp4'],
+            talking: ['talking01.mp4', 'talking02.mp4', 'talking03.mp4', 'talking04.mp4', 'talking05.mp4', 'talking06.mp4', 'talking07.mp4', 'talking08.mp4'],
+            reaction: ['reactions01.mp4', 'reactions02.mp4', 'reactions03.mp4', 'reactions04.mp4', 'reactions05.mp4']
+        };
+
+        let lastPlayed = null;
+
+        // Seleção inteligente com prevenção de repetição consecutiva
+        function getRandomAsset(category) {
+            const pool = library[category];
+            let filtered = pool.filter(item => item !== lastPlayed);
+            let selected = filtered[Math.floor(Math.random() * filtered.length)];
+            lastPlayed = selected;
+            return selected;
+        }
+
+        function triggerCategory(category) {
+            const chosenVideo = getRandomAsset(category);
+            console.log(`Enviando vídeo [${category}]:`, chosenVideo);
+            socket.emit('control-avatar', { video: chosenVideo });
+        }
+
+        function setScale(scaleValue) {
+            socket.emit('control-avatar', { scale: scaleValue });
+        }
+    </script>
+</body>
+</html>
