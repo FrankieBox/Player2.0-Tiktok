@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Display 1 - Core do Avatar (9:16 Zero Delay + Sensor)</title>
+    <style>
+        * { box-sizing: border-box; }
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100vw;
+            height: 100vh;
+            background: transparent;
+            overflow: hidden;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        #avatar-container {
+            position: relative;
+            width: 100vw;
+            height: 100vh;
+            max-width: calc(100vh * (9 / 16));
+            max-height: calc(100vw * (16 / 9));
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            transform: scale(1);
+            transition: transform 0.3s ease;
+        }
+
+        .avatar-video {
+            display: none;
+        }
+
+        #chroma-canvas {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="avatar-container">
+        <video id="video-a" class="avatar-video" autoplay muted playsinline crossorigin="anonymous"></video>
+        <video id="video-b" class="avatar-video" autoplay muted playsinline crossorigin="anonymous"></video>
+        <canvas id="chroma-canvas"></canvas>
+    </div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script>
+        const socket = io();
+        const canvas = document.getElementById('chroma-canvas');
+        const ctx = canvas.getContext('2d', { willReadFrequently: true });
+        const container = document.getElementById('avatar-container');
+
+        let videoA = document.getElementById('video-a');
+        let videoB = document.getElementById('video-b');
+        let activeVideo = videoA;
+        let nextVideo = videoB;
+        let animationFrameId = null;
+
+        function processFrame() {
+            if (activeVideo.paused || activeVideo.ended) return;
+
+            if (canvas.width !== activeVideo.videoWidth || canvas.height !== activeVideo.videoHeight) {
+                canvas.width = activeVideo.videoWidth || 720;
+                canvas.height = activeVideo.videoHeight || 1280;
+            }
+
+            ctx.drawImage(activeVideo, 0, 0, canvas.width, canvas.height);
+            let frame = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            let data = frame.data;
+
+            // Chroma Key limpo por pixel (remove fundo verde)
+            for (let i = 0; i < data.length; i += 4) {
+                let red = data[i];
+                let green = data[i + 1];
+                let blue = data[i + 2];
+
+                if (green > 75 && green > red * 1.12 && green > blue * 1.12) {
+                    data[i + 3] = 0; // Transparente absoluto
+                }
+            }
+
+            ctx.putImageData(frame, 0, 0);
+            animationFrameId = requestAnimationFrame(processFrame);
+        }
+
+        activeVideo.addEventListener('play', () => {
+            if (animationFrameId) cancelAnimationFrame(animationFrameId);
+            processFrame();
+        });
+
+        // Recebe comandos do Painel de Controlo via WebSocket
+        socket.on('update-avatar', (data) => {
+            if (data.video) {
+                const targetSrc = `/assets/${data.video}`;
+                
+                nextVideo.src = targetSrc;
+                nextVideo.load();
+                
+                nextVideo.oncanplaythrough = () => {
+                    nextVideo.oncanplaythrough = null;
+                    switchBuffers();
+                };
+                
+                // Fallback de segurança para transição imediata
+                setTimeout(switchBuffers, 150);
+            }
+
+            if (data.scale) {
+                container.style.transform = `scale(${data.scale})`;
+            }
+        });
+
+        function switchBuffers() {
+            nextVideo.play().then(() => {
+                activeVideo.pause();
+                
+                let temp = activeVideo;
+                activeVideo = nextVideo;
+                nextVideo = temp;
+
+                if (animationFrameId) cancelAnimationFrame(animationFrameId);
+                processFrame();
+
+                // Envia o sinal de confirmação para o sensor de latência no painel
+                socket.emit('sensor-ack');
+            }).catch(err => console.log("Erro na transição de buffer:", err));
+        }
+    </script>
+</body>
+</html>
