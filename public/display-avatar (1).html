@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Display Avatar - TikTok Shop</title>
+    <style>
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background-color: #00FF00; /* Chroma Key base */
+        }
+        #canvas-container {
+            width: 100vw;
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        canvas {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        video {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="canvas-container">
+        <canvas id="avatarCanvas"></canvas>
+    </div>
+
+    <!-- Duplo Buffer para Transição Instantânea -->
+    <video id="videoA" muted playsinline crossorigin="anonymous"></video>
+    <video id="videoB" muted playsinline crossorigin="anonymous"></video>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script>
+        const socket = io();
+        const canvas = document.getElementById('avatarCanvas');
+        const ctx = canvas.getContext('2d', { willReadFrequently: true });
+        
+        const videoA = document.getElementById('videoA');
+        const videoB = document.getElementById('videoB');
+        
+        let activeVideo = videoA;
+        let nextVideo = videoB;
+        let animationFrameId = null;
+        let loadStartTime = 0;
+
+        const videoCache = {};
+        const totalTalkingVideos = 11;
+
+        function resizeCanvas() {
+            canvas.width = 1080;
+            canvas.height = 1920;
+        }
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
+
+        // Pré-carregar todos os 11 vídeos para a memória RAM
+        async function preloadAllVideos() {
+            for (let i = 1; i <= totalTalkingVideos; i++) {
+                const numStr = i < 10 ? '0' + i : i;
+                const fileName = `talking${numStr}.mp4`;
+                const path = `/assets/${fileName}`;
+                
+                try {
+                    const response = await fetch(path);
+                    const blob = await response.blob();
+                    videoCache[fileName] = URL.createObjectURL(blob);
+                } catch (e) {
+                    console.error(`[RAM Cache] Erro ao carregar ${fileName}:`, e);
+                }
+            }
+            console.log("[RAM Cache] Todos os takes carregados com sucesso em memória!");
+        }
+
+        // Motor de Processamento de Chroma Key em Tempo Real
+        function processFrame() {
+            if (!activeVideo.paused && !activeVideo.ended) {
+                ctx.drawImage(activeVideo, 0, 0, canvas.width, canvas.height);
+                
+                let frame = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                let l = frame.data.length;
+
+                for (let i = 0; i < l; i += 4) {
+                    let r = frame.data[i];
+                    let g = frame.data[i + 1];
+                    let b = frame.data[i + 2];
+
+                    if (g > 90 && g > r * 1.2 && g > b * 1.2) {
+                        frame.data[i + 3] = 0; // Transparência
+                    }
+                }
+                ctx.putImageData(frame, 0, 0);
+            }
+            animationFrameId = requestAnimationFrame(processFrame);
+        }
+
+        // Função principal para trocar e reproduzir vídeo instantaneamente
+        async function playVideoFile(fileName) {
+            const videoUrl = videoCache[fileName] || `/assets/${fileName}`;
+            loadStartTime = performance.now();
+
+            nextVideo.src = videoUrl;
+            await nextVideo.load();
+
+            try {
+                await nextVideo.play();
+                
+                // Troca imediata dos buffers em memória
+                let temp = activeVideo;
+                activeVideo = nextVideo;
+                nextVideo = temp;
+
+                nextVideo.pause();
+
+                // Calcula a latência exata da transição em milissegundos
+                const latency = Math.round(performance.now() - loadStartTime);
+                socket.emit('video-switched', { fileName, latency });
+
+            } catch (err) {
+                console.error("[Display] Erro ao reproduzir vídeo:", err);
+            }
+        }
+
+        socket.on('play-video', (fileName) => {
+            playVideoFile(fileName);
+        });
+
+        window.addEventListener('load', async () => {
+            await preloadAllVideos();
+            if (videoCache['talking01.mp4']) {
+                videoA.src = videoCache['talking01.mp4'];
+                await videoA.load();
+                await videoA.play();
+                processFrame();
+            }
+        });
+    </script>
+</body>
+</html>
