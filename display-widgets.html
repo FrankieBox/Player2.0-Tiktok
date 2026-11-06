@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <title>Display 2 - Widgets e Produtos</title>
+    <style>
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100vw;
+            height: 100vh;
+            background: transparent;
+            overflow: hidden;
+            font-family: Arial, sans-serif;
+        }
+
+        /* Contentor flutuante para os widgets e produtos da live */
+        #widget-container {
+            position: absolute;
+            bottom: 20px;
+            right: 20px;
+            width: 350px;
+            background: rgba(18, 18, 18, 0.85);
+            color: #fff;
+            padding: 15px;
+            border-radius: 10px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+            display: none; /* Começa oculto até ser acionado */
+            border: 1px solid #333;
+        }
+
+        .product-card {
+            text-align: center;
+        }
+
+        .product-card img {
+            max-width: 100px;
+            height: auto;
+            border-radius: 6px;
+        }
+
+        .product-title {
+            font-size: 16px;
+            font-weight: bold;
+            margin: 10px 0 5px 0;
+        }
+
+        .product-price {
+            color: #00ffcc;
+            font-size: 18px;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="widget-container">
+        <div class="product-card" id="product-card">
+            <!-- Os dados do produto entram aqui dinamicamente -->
+            <p id="widget-text">A carregar dados do produto...</p>
+        </div>
+    </div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script>
+        const socket = io();
+        const widgetContainer = document.getElementById('widget-container');
+        const widgetText = document.getElementById('widget-text');
+
+        // Recebe comandos exclusivos do Painel de Controlo 2
+        socket.on('update-widgets', (data) => {
+            if (data.action === 'toggle') {
+                // Abre ou fecha a janela de produtos/widgets
+                widgetContainer.style.display = widgetContainer.style.display === 'none' ? 'block' : 'none';
+            }
+            if (data.product) {
+                // Atualiza as informações do produto em tempo real
+                widgetText.innerHTML = `
+                    <div class="product-title">${data.product.name}</div>
+                    <div class="product-price">${data.product.price}</div>
+                `;
+                widgetContainer.style.display = 'block';
+            }
+        });
+    </script>
+</body>
+</html>

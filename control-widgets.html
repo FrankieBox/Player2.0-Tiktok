@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <title>Painel de Controlo 2 - Widgets e Produtos</title>
+    <style>
+        body { font-family: Arial, sans-serif; background: #121212; color: #fff; padding: 20px; }
+        .card { background: #1e1e1e; padding: 15px; margin-bottom: 15px; border-radius: 8px; }
+        button { background: #00897b; color: #fff; border: none; padding: 10px 15px; margin: 5px; border-radius: 4px; cursor: pointer; }
+        button:hover { background: #004d40; }
+        .btn-toggle { background: #d32f2f; }
+        .btn-toggle:hover { background: #b71c1c; }
+    </style>
+</head>
+<body>
+    <h1>Painel de Controlo - Canal 2 (Widgets & Produtos)</h1>
+
+    <div class="card">
+        <h3>Estado do Vitrina TikTok Shop</h3>
+        <button class="btn-toggle" onclick="toggleWidget()">Abrir / Fechar Janela</button>
+    </div>
+
+    <div class="card">
+        <h3>Alternar Produtos em Destaque</h3>
+        <button onclick="setProduct('Camisa Oversized Premium', 'R$ 89,90')">Produto 1: Camisa</button>
+        <button onclick="setProduct('Ténis Esportivo Urbano', 'R$ 199,90')">Produto 2: Ténis</button>
+    </div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script>
+        const socket = io();
+
+        function toggleWidget() {
+            socket.emit('widget-command', { action: 'toggle' });
+        }
+
+        function setProduct(name, price) {
+            socket.emit('widget-command', { 
+                product: { name: name, price: price } 
+            });
+        }
+    </script>
+</body>
+</html>
