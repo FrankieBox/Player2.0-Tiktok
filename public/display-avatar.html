@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Display Avatar - TikTok Shop</title>
+    <style>
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background-color: #00FF00; /* Fundo verde base para teste de chroma */
+        }
+        #canvas-container {
+            width: 100vw;
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        canvas {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        video {
+            display: none; /* Vídeos ocultos, renderizados via Canvas */
+        }
+    </style>
+</head>
+<body>
+
+    <div id="canvas-container">
+        <canvas id="avatarCanvas"></canvas>
+    </div>
+
+    <!-- Motores de Vídeo em Duplo Buffer para Transição Instantânea -->
+    <video id="videoA" muted playsinline crossorigin="anonymous"></video>
+    <video id="videoB" muted playsinline crossorigin="anonymous"></video>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script>
+        const socket = io();
+        const canvas = document.getElementById('avatarCanvas');
+        const ctx = canvas.getContext('2d', { willReadFrequently: true });
+        
+        const videoA = document.getElementById('videoA');
+        const videoB = document.getElementById('videoB');
+        
+        let activeVideo = videoA;
+        let nextVideo = videoB;
+        let animationFrameId = null;
+
+        // Repositório em memória RAM (Blob URLs) para eliminar latência de rede
+        const videoCache = {};
+        const totalTalkingVideos = 11; // De talking01 a talking11
+
+        // Ajustar resolução nativa do Canvas para 9:16 (vertical TikTok)
+        function resizeCanvas() {
+            canvas.width = 1080;
+            canvas.height = 1920;
+        }
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
+
+        // Pré-carregar todos os 11 vídeos para a memória RAM do navegador
+        async function preloadAllVideos() {
+            for (let i = 1; i <= totalTalkingVideos; i++) {
+                const numStr = i < 10 ? '0' + i : i;
+                const fileName = `talking${numStr}.mp4`;
+                const path = `/assets/${fileName}`;
+                
+                try {
+                    const response = await fetch(path);
+                    const blob = await response.blob();
+                    videoCache[fileName] = URL.createObjectURL(blob);
+                    console.log(`[RAM Cache] Carregado com sucesso: ${fileName}`);
+                } catch (e) {
+                    console.error(`[RAM Cache] Erro ao carregar ${fileName}:`, e);
+                }
+            }
+        }
+
+        // Motor de Processamento de Chroma Key em Tempo Real no Canvas
+        function processFrame() {
+            if (!activeVideo.paused && !activeVideo.ended) {
+                ctx.drawImage(activeVideo, 0, 0, canvas.width, canvas.height);
+                
+                let frame = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                let l = frame.data.length;
+
+                for (let i = 0; i < l; i += 4) {
+                    let r = frame.data[i];
+                    let g = frame.data[i + 1];
+                    let b = frame.data[i + 2];
+
+                    // Algoritmo de remoção de Chroma Key (Verde)
+                    if (g > 90 && g > r * 1.2 && g > b * 1.2) {
+                        frame.data[i + 3] = 0; // Torna o pixel transparente
+                    }
+                }
+                ctx.putImageData(frame, 0, 0);
+            }
+            animationFrameId = requestAnimationFrame(processFrame);
+        }
+
+        // Comando do Servidor para Trocar ou Reproduzir Vídeo
+        socket.on('play-video', async (fileName) => {
+            const videoUrl = videoCache[fileName] || `/assets/${fileName}`;
+            console.log(`[Display] A reproduzir: ${fileName}`);
+
+            nextVideo.src = videoUrl;
+            await nextVideo.load();
+
+            try {
+                await nextVideo.play();
+                
+                // Alterna os buffers instantaneamente
+                let temp = activeVideo;
+                activeVideo = nextVideo;
+                nextVideo = temp;
+
+                nextVideo.pause();
+            } catch (err) {
+                console.error("[Display] Erro ao reproduzir vídeo:", err);
+            }
+        });
+
+        // Inicialização do Sistema
+        window.addEventListener('load', async () => {
+            await preloadAllVideos();
+            
+            // Inicia com o primeiro vídeo de fala em loop ou aguardando comando
+            if (videoCache['talking01.mp4']) {
+                videoA.src = videoCache['talking01.mp4'];
+                await videoA.load();
+                await videoA.play();
+                cancelAnimationFrame(animationFrameId);
+                processFrame();
+            }
+        });
+    </script>
+</body>
+</html>

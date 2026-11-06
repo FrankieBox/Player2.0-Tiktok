@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Painel de Controlo - Avatar TikTok Shop</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #121212;
+            color: #ffffff;
+            margin: 0;
+            padding: 20px;
+        }
+        h1 { font-size: 22px; color: #00ffcc; text-align: center; }
+        .monitor-box {
+            background: #1e1e1e;
+            border: 2px solid #00ffcc;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+        .controls-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        button {
+            background-color: #333;
+            color: white;
+            border: 1px solid #555;
+            padding: 15px;
+            font-size: 16px;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: 0.2s;
+        }
+        button:hover { background-color: #444; }
+        button.active { background-color: #00ffcc; color: #000; font-weight: bold; }
+        button.action-btn { background-color: #ff3366; border: none; grid-column: span 2; font-weight: bold; }
+    </style>
+</head>
+<body>
+
+    <h1>Painel de Controlo - Avatar Autónomo</h1>
+
+    <!-- Monitor de Fila em Tempo Real -->
+    <div class="monitor-box">
+        <p><strong>A a Rodar:</strong> <span id="current-playing" style="color: #00ffcc;">Nenhum</span></p>
+        <p><strong>Próximo na Fila:</strong> <span id="next-queue" style="color: #ffcc00;">Aguardando...</span></p>
+    </div>
+
+    <div class="controls-grid">
+        <button id="btn-autolive" class="action-btn" onclick="toggleAutoLive()">🟢 Ligar Auto-Live (Talking Contínuo)</button>
+        
+        <!-- Botões Manuais para os 11 takes -->
+        <script>
+            for (let i = 1; i <= 11; i++) {
+                let num = i < 10 ? '0' + i : i;
+                document.write(`<button onclick="playManual('talking${num}.mp4')">Talking ${num}</button>`);
+            }
+        </script>
+    </div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script>
+        const socket = io();
+        let autoLiveActive = false;
+        let autoLiveInterval = null;
+
+        const talkingFiles = [
+            'talking01.mp4', 'talking02.mp4', 'talking03.mp4', 'talking04.mp4',
+            'talking05.mp4', 'talking06.mp4', 'talking07.mp4', 'talking08.mp4',
+            'talking09.mp4', 'talking10.mp4', 'talking11.mp4'
+        ];
+
+        let queue = [];
+
+        function shuffleQueue() {
+            queue = [...talkingFiles].sort(() => Math.random() - 0.5);
+        }
+
+        function playManual(filename) {
+            socket.emit('trigger-video', filename);
+            document.getElementById('current-playing').innerText = filename;
+        }
+
+        function toggleAutoLive() {
+            autoLiveActive = !autoLiveActive;
+            const btn = document.getElementById('btn-autolive');
+
+            if (autoLiveActive) {
+                btn.classList.add('active');
+                btn.innerText = "🔴 Desligar Auto-Live";
+                shuffleQueue();
+                runAutoLiveLoop();
+            } else {
+                btn.classList.remove('active');
+                btn.innerText = "🟢 Ligar Auto-Live (Talking Contínuo)";
+                clearTimeout(autoLiveInterval);
+                document.getElementById('next-queue').innerText = "Pausado";
+            }
+        }
+
+        function runAutoLiveLoop() {
+            if (!autoLiveActive) return;
+
+            if (queue.length === 0) {
+                shuffleQueue();
+            }
+
+            const nextFile = queue.shift();
+            const upcomingFile = queue[0] || talkingFiles[0];
+
+            socket.emit('trigger-video', nextFile);
+            document.getElementById('current-playing').innerText = nextFile;
+            document.getElementById('next-queue').innerText = upcomingFile;
+
+            // Como os takes têm entre 13 e 21 segundos, programamos a troca para cada ~15 segundos em média
+            autoLiveInterval = setTimeout(runAutoLiveLoop, 16000);
+        }
+    </script>
+</body>
+</html>
