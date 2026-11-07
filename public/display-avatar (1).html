@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Display Avatar - TikTok Shop</title>
+    <style>
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background-color: transparent;
+        }
+        
+        #status-indicator {
+            position: fixed;
+            top: 10px;
+            left: 10px;
+            width: 12px;
+            height: 12px;
+            background-color: #ff3366;
+            border-radius: 50%;
+            z-index: 9999;
+            box-shadow: 0 0 8px #ff3366;
+        }
+        #status-indicator.connected {
+            background-color: #00ffcc;
+            box-shadow: 0 0 8px #00ffcc;
+        }
+
+        #canvas-container {
+            position: absolute;
+            bottom: 20px;
+            right: 20px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            box-sizing: border-box;
+            touch-action: none;
+            cursor: grab;
+            transition: width 0.3s ease, height 0.3s ease;
+        }
+
+        .escala-full {
+            position: fixed !important;
+            top: 0 !important;
+            left: 0 !important;
+            width: 100vw !important;
+            height: 100vh !important;
+            bottom: auto !important;
+            right: auto !important;
+        }
+
+        .escala-pip-medio { width: 40vw; height: 70vh; }
+        .escala-pip-pequeno { width: 25vw; height: 45vh; }
+
+        canvas {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+            pointer-events: none;
+        }
+        
+        video, audio { display: none; }
+    </style>
+</head>
+<body>
+
+    <div id="status-indicator" title="Estado da Conexão"></div>
+
+    <div id="canvas-container" class="escala-full">
+        <canvas id="avatarCanvas"></canvas>
+    </div>
+
+    <video id="videoA" muted playsinline crossorigin="anonymous"></video>
+    <video id="videoB" muted playsinline crossorigin="anonymous"></video>
+    <audio id="audioPlayer" crossorigin="anonymous"></audio>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script>
+        const socket = io();
+        const indicator = document.getElementById('status-indicator');
+        
+        socket.on('connect', () => {
+            indicator.classList.add('connected');
+            console.log("[Display] Conectado ao servidor!");
+        });
+
+        socket.on('disconnect', () => {
+            indicator.classList.remove('connected');
+        });
+
+        const canvas = document.getElementById('avatarCanvas');
+        const ctx = canvas.getContext('2d', { willReadFrequently: true });
+        const container = document.getElementById('canvas-container');
+        
+        const videoA = document.getElementById('videoA');
+        const videoB = document.getElementById('videoB');
+        const audioPlayer = document.getElementById('audioPlayer');
+        
+        let activeVideo = videoA;
+        let nextVideo = videoB;
+        const videoCache = {};
+        const totalTalkingVideos = 11;
+
+        function resizeCanvas() {
+            canvas.width = 1080;
+            canvas.height = 1920;
+        }
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
+
+        async function preloadAllVideos() {
+            for (let i = 1; i <= totalTalkingVideos; i++) {
+                const numStr = i < 10 ? '0' + i : i;
+                const fileName = `talking${numStr}.mp4`;
+                try {
+                    const response = await fetch(`/assets/${fileName}`);
+                    const blob = await response.blob();
+                    videoCache[fileName] = URL.createObjectURL(blob);
+                } catch (e) {
+                    console.error(`Erro ao carregar ${fileName}:`, e);
+                }
+            }
+        }
+
+        function processFrame() {
+            if (!activeVideo.paused && !activeVideo.ended) {
+                ctx.drawImage(activeVideo, 0, 0, canvas.width, canvas.height);
+                let frame = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                let l = frame.data.length;
+
+                for (let i = 0; i < l; i += 4) {
+                    let r = frame.data[i];
+                    let g = frame.data[i + 1];
+                    let b = frame.data[i + 2];
+                    if (g > 90 && g > r * 1.2 && g > b * 1.2) {
+                        frame.data[i + 3] = 0;
+                    }
+                }
+                ctx.putImageData(frame, 0, 0);
+            }
+            requestAnimationFrame(processFrame);
+        }
+
+        async function playVideoFile(fileName) {
+            const videoUrl = videoCache[fileName] || `/assets/${fileName}`;
+            nextVideo.src = videoUrl;
+            await nextVideo.load();
+
+            try {
+                await nextVideo.play();
+                let temp = activeVideo;
+                activeVideo = nextVideo;
+                nextVideo = temp;
+                nextVideo.pause();
+            } catch (err) {
+                console.error("Erro ao reproduzir:", err);
+            }
+        }
+
+        socket.on('play-video', (fileName) => {
+            playVideoFile(fileName);
+        });
+
+        socket.on('change-scale', (scaleClass) => {
+            container.className = "";
+            container.classList.add(scaleClass);
+        });
+
+        socket.on('play-audio', (audioData) => {
+            audioPlayer.src = audioData.url;
+            audioPlayer.play().catch(err => console.error("Erro áudio:", err));
+        });
+
+        window.addEventListener('load', async () => {
+            await preloadAllVideos();
+            if (videoCache['talking01.mp4']) {
+                videoA.src = videoCache['talking01.mp4'];
+                await videoA.load();
+                await videoA.play();
+                processFrame();
+            }
+        });
+    </script>
+</body>
+</html>
