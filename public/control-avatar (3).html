@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Painel de Controlo - TikTok Shop</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #121212;
+            color: #ffffff;
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        h2 { color: #00ffcc; margin-bottom: 10px; }
+        .card {
+            background: #1e1e1e;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 15px;
+            width: 100%;
+            max-width: 400px;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.5);
+        }
+        button {
+            background-color: #00ffcc;
+            color: #121212;
+            border: none;
+            padding: 10px 15px;
+            margin: 5px 0;
+            border-radius: 5px;
+            font-weight: bold;
+            cursor: pointer;
+            width: 100%;
+        }
+        button:active { background-color: #00b388; }
+        input[type="file"] {
+            background-color: #2a2a2a;
+            color: #ffffff;
+            padding: 10px;
+            border-radius: 5px;
+            width: 100%;
+            box-sizing: border-box;
+            margin-bottom: 10px;
+            border: 1px dashed #00ffcc;
+        }
+        .status-box {
+            font-size: 14px;
+            color: #ff3366;
+            margin-top: 5px;
+            margin-bottom: 15px;
+        }
+        .status-box.active { color: #00ffcc; }
+    </style>
+</head>
+<body>
+
+    <h2>Estúdio Mobile - Controlo</h2>
+    <div id="connection-status" class="status-box">Estado: A ligar ao servidor...</div>
+
+    <!-- Controlo de Takes do Avatar -->
+    <div class="card">
+        <h3>Takes do Avatar</h3>
+        <button onclick="dispararVideo('talking01.mp4')">Disparar Take 01</button>
+        <button onclick="dispararVideo('talking02.mp4')">Disparar Take 02</button>
+        <button onclick="dispararVideo('talking03.mp4')">Disparar Take 03</button>
+    </div>
+
+    <!-- Controlo de Escala / PIP -->
+    <div class="card">
+        <h3>Tamanho do Avatar</h3>
+        <button onclick="mudarEscala('escala-full')">Tela Cheia (Full)</button>
+        <button onclick="mudarEscala('escala-pip-medio')">PIP Médio</button>
+        <button onclick="mudarEscala('escala-pip-pequeno')">PIP Pequeno</button>
+    </div>
+
+    <!-- Gestão e Disparo de Áudio / Mídia -->
+    <div class="card">
+        <h3>Áudio da Live (Player Invisível)</h3>
+        <label for="audioFilePicker" style="font-size: 13px; color: #aaa; display: block; margin-bottom: 5px;">Carregar Ficheiro de Áudio/Mídia (.mp4 / .mp3):</label>
+        <input type="file" id="audioFilePicker" accept="video/mp4,audio/*">
+        <button onclick="dispararAudioCarregado()">▶ Tocar Mídia Carregada</button>
+    </div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script>
+        const socket = io();
+        const statusBox = document.getElementById('connection-status');
+        let selectedAudioUrl = null;
+        let selectedAudioName = '';
+
+        socket.on('connect', () => {
+            statusBox.textContent = "Estado: Conectado ao Servidor ✅";
+            statusBox.classList.add('active');
+        });
+
+        socket.on('disconnect', () => {
+            statusBox.textContent = "Estado: Desconectado ❌";
+            statusBox.classList.remove('active');
+        });
+
+        function dispararVideo(fileName) {
+            socket.emit('trigger-video', fileName);
+        }
+
+        function mudarEscala(scaleClass) {
+            socket.emit('change-scale', scaleClass);
+        }
+
+        // Manipula o ficheiro escolhido no telemóvel/computador
+        document.getElementById('audioFilePicker').addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (file) {
+                selectedAudioName = file.name;
+                selectedAudioUrl = URL.createObjectURL(file);
+                alert(`Ficheiro carregado no painel: ${selectedAudioName}`);
+            }
+        });
+
+        function dispararAudioCarregado() {
+            if (!selectedAudioUrl) {
+                alert("Por favor, selecione um ficheiro de áudio/mídia primeiro!");
+                return;
+            }
+            socket.emit('trigger-audio', {
+                name: selectedAudioName,
+                url: selectedAudioUrl
+            });
+            console.log("[Painel] A transmitir mídia local para o display:", selectedAudioName);
+        }
+    </script>
+</body>
+</html>
